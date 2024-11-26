@@ -1,6 +1,9 @@
 package com.acikek.cmods.mixin;
 
+import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
+import com.llamalad7.mixinextras.sugar.Local;
+import net.fabricmc.fabric.api.item.v1.ModifyItemAttributeModifiersCallback;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.attribute.EntityAttribute;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
@@ -16,15 +19,18 @@ import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
 @Mixin(ItemStack.class)
 public abstract class ItemStackMixin {
 
-    @Shadow public abstract Item getItem();
-
-    @Inject(method = "getAttributeModifiers", locals = LocalCapture.CAPTURE_FAILHARD,
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/nbt/NbtCompound;getList(Ljava/lang/String;I)Lnet/minecraft/nbt/NbtList;"))
+    @Inject(method = "getAttributeModifiers",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/nbt/NbtCompound;getList(Ljava/lang/String;I)Lnet/minecraft/nbt/NbtList;"))
     private void combineModifiers(
-            EquipmentSlot slot,
-            CallbackInfoReturnable<Multimap<EntityAttribute, EntityAttributeModifier>> cir,
-            Multimap<EntityAttribute, EntityAttributeModifier> multimap
+        EquipmentSlot slot,
+        CallbackInfoReturnable<Multimap<EntityAttribute, EntityAttributeModifier>> cir,
+        @Local Multimap<EntityAttribute, EntityAttributeModifier> multimap
     ) {
-        multimap.putAll(getItem().getAttributeModifiers(slot));
+        // Fabric Item API Compatibility
+        ItemStack stack = (ItemStack) (Object) this;
+        //we need to ensure it is modifiable for the callback, use linked map to preserve ordering
+        Multimap<EntityAttribute, EntityAttributeModifier> attributeModifiers = LinkedHashMultimap.create(stack.getItem().getAttributeModifiers(stack, slot));
+        ModifyItemAttributeModifiersCallback.EVENT.invoker().modifyAttributeModifiers(stack, slot, attributeModifiers);
+        multimap.putAll(attributeModifiers);
     }
 }
